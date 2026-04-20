@@ -1,6 +1,54 @@
-from pydantic import BaseModel, Field
-from typing import Optional, List
+from pydantic import BaseModel, Field, EmailStr
+from typing import Optional, List, Any
 from datetime import datetime
+from enum import Enum
+
+
+class UserRole(str, Enum):
+    regular = "regular"
+    admin = "admin"
+
+
+class PipelineStatus(str, Enum):
+    pending = "pending"
+    detected = "detected"
+    predicted = "predicted"
+    completed = "completed"
+
+
+class UserCreate(BaseModel):
+    email: str
+    password: str
+    full_name: Optional[str] = None
+
+
+class UserLogin(BaseModel):
+    email: str
+    password: str
+
+
+class UserOut(BaseModel):
+    id: int
+    email: str
+    full_name: Optional[str] = None
+    role: UserRole
+    is_active: bool
+    created_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    expires_in: int
+    user: UserOut
+
+
+class TokenData(BaseModel):
+    user_id: Optional[int] = None
+    email: Optional[str] = None
 
 
 class TokenInfo(BaseModel):
@@ -32,6 +80,9 @@ class AppointmentInfo(BaseModel):
     attendees: List[str] = []
     description: Optional[str] = None
     confidence: float = Field(default=0.0, ge=0.0, le=1.0)
+    meeting_intent: Optional[str] = None
+    timezone: Optional[str] = None
+    modality: Optional[str] = None
 
 
 class ScannedEmail(BaseModel):
@@ -45,12 +96,38 @@ class ScannedEmail(BaseModel):
     appointment: Optional[AppointmentInfo] = None
     calendar_event_created: bool = False
     calendar_event_id: Optional[str] = None
+    pipeline_status: PipelineStatus = PipelineStatus.pending
 
 
 class EmailScanResult(BaseModel):
     total_scanned: int
     appointments_found: int
     emails: List[ScannedEmail]
+
+
+class RecommendedSlot(BaseModel):
+    start: str
+    end: str
+    score: float = Field(ge=0.0, le=1.0)
+    reason: Optional[str] = None
+
+
+class SlotPredictionResult(BaseModel):
+    email_id: str
+    slots: List[RecommendedSlot]
+    pipeline_status: PipelineStatus
+
+
+class SuggestionVariant(BaseModel):
+    style: str
+    subject: str
+    body: str
+
+
+class SuggestionResult(BaseModel):
+    email_id: str
+    variants: List[SuggestionVariant]
+    pipeline_status: PipelineStatus
 
 
 class CalendarEvent(BaseModel):
@@ -83,7 +160,13 @@ class CreateEventResponse(BaseModel):
     message: str
 
 
+class GmailScanRequest(BaseModel):
+    email: str
+    app_password: str
+    max_emails: int = Field(default=20, ge=1, le=100)
+
+
 class ApiResponse(BaseModel):
     success: bool
     message: str
-    data: Optional[dict] = None
+    data: Optional[Any] = None
