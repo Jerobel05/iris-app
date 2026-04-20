@@ -8,12 +8,17 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 
 from config import settings
+from database import init_db
 from routers import auth, emails, calendar, gmail
+from routers import users, suggestions
 
 app = FastAPI(
     title="Iris Backend API",
-    description="Backend pour Iris — extraction d'emails Outlook et gestion du calendrier via Microsoft Graph API",
-    version="1.0.0",
+    description=(
+        "Backend pour Iris — extraction intelligente d'emails (Gmail/Outlook), "
+        "détection de rendez-vous par NLP, prédiction de créneaux et suggestions de réponses IA."
+    ),
+    version="2.0.0",
     docs_url="/api/docs",
     redoc_url="/api/redoc",
     openapi_url="/api/openapi.json",
@@ -34,42 +39,57 @@ app.add_middleware(
 )
 
 app.include_router(auth.router, prefix="/api")
+app.include_router(users.router, prefix="/api")
 app.include_router(emails.router, prefix="/api")
 app.include_router(calendar.router, prefix="/api")
 app.include_router(gmail.router, prefix="/api")
+app.include_router(suggestions.router, prefix="/api")
 
 
+@app.on_event("startup")
+async def startup_event():
+    init_db()
+
+
+@app.get("/health")
 @app.get("/api/healthz")
 async def health_check():
-    return {"status": "ok", "service": "iris-backend"}
+    return {"status": "ok", "service": "iris-backend", "version": "2.0.0"}
 
 
 @app.get("/api")
 async def root():
     return {
-        "message": "Iris Backend API",
+        "message": "Iris Backend API v2",
         "docs": "/api/docs",
         "endpoints": {
+            "users": {
+                "register": "POST /api/users/register",
+                "login": "POST /api/users/login",
+                "me": "GET /api/users/me",
+            },
             "auth": {
-                "login": "GET /api/auth/login",
+                "login_outlook": "GET /api/auth/login",
                 "callback": "GET /api/auth/callback",
-                "logout": "GET /api/auth/logout",
                 "status": "GET /api/auth/status",
-            },
-            "emails": {
-                "scan": "GET /api/emails/scan",
-                "appointments": "GET /api/emails/appointments",
-                "detail": "GET /api/emails/{email_id}",
-            },
-            "calendar": {
-                "events": "GET /api/calendar/events",
-                "create": "POST /api/calendar/events",
-                "delete": "DELETE /api/calendar/events/{event_id}",
             },
             "gmail": {
                 "scan": "POST /api/gmail/scan",
                 "appointments": "POST /api/gmail/appointments",
                 "setup_guide": "GET /api/gmail/setup-guide",
+            },
+            "emails": {
+                "scan_outlook": "GET /api/emails/scan",
+                "appointments_outlook": "GET /api/emails/appointments",
+            },
+            "suggestions": {
+                "predict_slots": "POST /api/suggest/{email_id}/slots",
+                "suggest_reply": "POST /api/suggest/{email_id}",
+                "pipeline_status": "GET /api/suggest/pipeline/{email_id}",
+            },
+            "calendar": {
+                "events": "GET /api/calendar/events",
+                "create": "POST /api/calendar/events",
             },
         },
     }
